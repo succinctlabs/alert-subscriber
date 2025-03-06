@@ -1,6 +1,8 @@
 use std::time::Duration;
 
-use crate::handler::AlertHandler;
+use tracing::Level;
+
+use crate::handler::{AlertHandler, AlertFuture};
 use crate::AlertLayer;
 
 /// The default deduplication time for Seal alerts.
@@ -8,6 +10,7 @@ use crate::AlertLayer;
 /// Every 30 minutes, a new alert is sent.
 const SEAL_DEFAULT_DEDUP_TIME: Duration = Duration::from_secs(60 * 30);
 
+/// The default buffer size for Seal alerts.
 const SEAL_DEFAULT_BUFFER: usize = 100;
 
 /// Creates a new `AlertLayer` for sending Seal alerts.
@@ -43,7 +46,7 @@ pub fn seal_layer() -> AlertLayer {
 
     let handler = SealHandler { client: reqwest::Client::new(), url, bearer_token };
 
-    AlertLayer::new(handler, dedup_time, buffer)
+    AlertLayer::new(handler, Level::WARN, dedup_time, buffer)
 }
 
 pub struct SealHandler {
@@ -59,7 +62,7 @@ impl AlertHandler for SealHandler {
         &self,
         level: &tracing::Level,
         msg: &str,
-    ) -> impl super::AlertFuture<Self::Error> {
+    ) -> impl AlertFuture<Self::Error> {
         let formatted_msg = format!("{}: {}", level, msg);
 
         async move {
