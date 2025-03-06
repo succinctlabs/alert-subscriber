@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use tracing::Level;
 
-use crate::handler::{AlertHandler, AlertFuture};
+use crate::handler::{AlertFuture, AlertHandler};
 use crate::AlertLayer;
 
 /// The default deduplication time for Seal alerts.
@@ -22,7 +22,7 @@ const SEAL_DEFAULT_BUFFER: usize = 100;
 /// * `SEAL_DEDUP_TIME`: Optional deduplication time.
 /// * `SEAL_BUFFER`: Optional buffer size for events.
 ///
-/// # Panics: 
+/// # Panics:
 /// - If any of the environment variables are not set.
 /// - If this is called outside of a tokio runtime.
 pub fn seal_layer() -> AlertLayer {
@@ -31,20 +31,38 @@ pub fn seal_layer() -> AlertLayer {
     let bearer_token = std::env::var("SEAL_BEARER_TOKEN").expect("SEAL_BEARER_TOKEN is not set");
 
     // Get optional environment variables.
-    let dedup_time = std::env::var("SEAL_DEDUP_TIME")
-        .expect("SEAL_DEDUP_TIME is not set")
-        .parse::<u64>()
-        .inspect_err(|e| eprintln!("SEAL_DEDUP_TIME is not a valid duration: {}, using default (30 mins)", e))
-        .map(Duration::from_secs)
-        .unwrap_or(SEAL_DEFAULT_DEDUP_TIME);
+    let dedup_time = match std::env::var("SEAL_DEDUP_TIME") {
+        Ok(v) => v
+            .parse::<u64>()
+            .inspect_err(|e| {
+                eprintln!(
+                    "SEAL_DEDUP_TIME is not a valid duration: {}, using default (30 mins)",
+                    e
+                )
+            })
+            .map(Duration::from_secs)
+            .unwrap_or(SEAL_DEFAULT_DEDUP_TIME),
+        Err(_) => SEAL_DEFAULT_DEDUP_TIME,
+    };
 
-    let buffer = std::env::var("SEAL_BUFFER")
-        .expect("SEAL_BUFFER is not set")
-        .parse::<usize>()
-        .inspect_err(|e| eprintln!("SEAL_BUFFER is not a valid usize: {}, using default (100)", e))
-        .unwrap_or(SEAL_DEFAULT_BUFFER);
+    let buffer = match std::env::var("SEAL_BUFFER") {
+        Ok(v) => v
+            .parse::<usize>()
+            .inspect_err(|e| {
+                eprintln!(
+                    "SEAL_BUFFER is not a valid usize: {}, using default (100)",
+                    e
+                )
+            })
+            .unwrap_or(SEAL_DEFAULT_BUFFER),
+        Err(_) => SEAL_DEFAULT_BUFFER,
+    };
 
-    let handler = SealHandler { client: reqwest::Client::new(), url, bearer_token };
+    let handler = SealHandler {
+        client: reqwest::Client::new(),
+        url,
+        bearer_token,
+    };
 
     AlertLayer::new(handler, Level::WARN, dedup_time, buffer)
 }
@@ -58,15 +76,12 @@ pub struct SealHandler {
 impl AlertHandler for SealHandler {
     type Error = reqwest::Error;
 
-    fn handle_alert(
-        &self,
-        level: &tracing::Level,
-        msg: &str,
-    ) -> impl AlertFuture<Self::Error> {
+    fn handle_alert(&self, level: &tracing::Level, msg: &str) -> impl AlertFuture<Self::Error> {
         let formatted_msg = format!("{}: {}", level, msg);
 
         async move {
-            self.client.post(&self.url)
+            self.client
+                .post(&self.url)
                 .bearer_auth(&self.bearer_token)
                 .body(formatted_msg)
                 .send()

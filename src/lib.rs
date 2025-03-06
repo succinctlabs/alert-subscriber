@@ -16,6 +16,7 @@
 //! 
 //! tracing::error!(alert = true, "Critical error occured ... ");
 //! ```
+
 /// The `handler` module contains the `AlertHandler` trait and its implementations.
 pub mod handler;
 pub use crate::handler::{AlertHandler, *};
@@ -105,6 +106,7 @@ where
                 }
             }
 
+            
             tokio::spawn({
                 let tx = self.handler_tx.clone();
 
